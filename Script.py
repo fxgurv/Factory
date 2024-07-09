@@ -1,40 +1,28 @@
-import os
-from googleapiclient.discovery import build
+import google.generativeai as genai
 
-google_api_key = os.getenv('GOOGLE_API_KEY')
-service = build('gemini', 'v1', developerKey=google_api_key)
+GOOGLE_API_KEY = "AIzaSyC6N1MVe9WmAFjWMNuXjlaLnYa8eO"
+genai.configure(api_key=GOOGLE_API_KEY)
+model = genai.GenerativeModel('gemini-pro')
 
 def gpt_entry(niche):
-    ideas = []
-    request = service.text().generate(
-        body={
-            'prompt': f"You are a YouTube content creator. You are making videos about {niche}. I need 5 title ideas for my YouTube channel about {niche}. Format the titles into 5 bullet points."
-        }
-    )
-    response = request.execute()
-    results = response['choices'][0]['text'].splitlines()
+    prompt = f"Generate 5 short video ideas about {niche}. Each idea should be a single sentence without numbering."
+    response = model.generate_content(prompt)
+    ideas = response.text.split('\n')
+    return [idea.strip() for idea in ideas if idea.strip() and not idea.strip().startswith(('1.', '2.', '3.', '4.', '5.'))]
 
-    for result in results:
-        ideas.append(result)
-    return ideas
+def gpt_reformat(idea):
+    prompt = f"Create a short script for a 60-second video based on this idea: {idea}. The script should have an introduction, 3 main points, and a conclusion."
+    response = model.generate_content(prompt)
+    return response.text
 
-def gpt_script(subject):
-    request = service.text().generate(
-        body={
-            'prompt': f"You are creating voice-overs for short videos(about 1 minute long), you sound very clever and also funny. I need short voice-over text for about 1500 characters about: {subject}. I don't need any instructions according to video and anything else."
-        }
-    )
-    response = request.execute()
-    script = response['choices'][0]['text']
-    return script
-
-def gpt_reformat(subject):
-    script = gpt_script(subject)
-    request = service.text().generate(
-        body={
-            'prompt': f"{script} reformat this script into one paragraph remove any instructions to the video, i need just pure text."
-        }
-    )
-    response = request.execute()
-    script = response['choices'][0]['text']
-    return script
+if __name__ == "__main__":
+    test_niche = "artificial intelligence"
+    ideas = gpt_entry(test_niche)
+    print("Generated Ideas:")
+    for i, idea in enumerate(ideas, 1):
+        print(f"{i}. {idea}")
+    
+    if ideas:
+        print("\nGenerating script for the first idea:")
+        script = gpt_reformat(ideas[0])
+        print(script)
