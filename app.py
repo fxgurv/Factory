@@ -20,15 +20,15 @@ directories = ["Music", "Fonts", "Temp"]
 # Check if the directories exist, if not, create them
 for directory in directories:
     if not os.path.exists(directory):
-        os.makedirs(directory)  # Create the directory
+        os.makedirs(directory)
 
 # Print a message to confirm the directories were created
 print("Directories created successfully!")
 
 # Define parameters for generating content
-NICHE = "Space"  # The niche or topic for the content
-HEADINGS = "5"  # Number of headings to generate
-LANGUAGE = "English"  # Language for the generated content
+NICHE = "Space"
+HEADINGS = "5"
+LANGUAGE = "English"
 LLM = "G4f"  # Language model to use (Gimini or G4f)
 
 # Create a prompt for generating headings
