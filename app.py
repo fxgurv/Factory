@@ -1,30 +1,26 @@
-import os  # Import the os module for interacting with the operating system
-import json  # Import the json module for working with JSON data
-import requests  # Import the requests module for making HTTP requests
-from g4f.client import Client  # Import the Client class from the g4f.client module
-from google.colab import userdata  # Import the userdata module from google.colab
-import google.generativeai as genai  # Import the generativeai module from google
+import os
+import json
+import requests 
+from g4f.client import Client
+from google.colab import userdata
+import google.generativeai as genai 
 
-from moviepy.editor import (  # Import various classes and functions from moviepy.editor
-    VideoFileClip, AudioFileClip, CompositeVideoClip, ColorClip, 
-    concatenate_videoclips, vfx
+from moviepy.editor import ( 
+    VideoFileClip, AudioFileClip, CompositeVideoClip, ColorClip,
+    concatenate_videoclips, vfx, TextClip
 )
 
-from elevenlabs import play, save, stream  # Import functions from elevenlabs
-from elevenlabs.client import ElevenLabs  # Import the ElevenLabs client
+from elevenlabs import play, save, stream
+from elevenlabs.client import ElevenLabs
+from faster_whisper import WhisperModel
 
 # Define the directory names
-Music_dir = "Music"  # Directory for storing music files
-Fonts_dir = "Fonts"  # Directory for storing font files
-Temp_dir = "Temp"  # Directory for storing temporary files
+directories = ["Music", "Fonts", "Temp"]
 
 # Check if the directories exist, if not, create them
-if not os.path.exists(Music_dir):
-    os.makedirs(Music_dir)  # Create the Music directory
-if not os.path.exists(Fonts_dir):
-    os.makedirs(Fonts_dir)  # Create the Fonts directory
-if not os.path.exists(Temp_dir):
-    os.makedirs(Temp_dir)  # Create the Temp directory
+for directory in directories:
+    if not os.path.exists(directory):
+        os.makedirs(directory)  # Create the directory
 
 # Print a message to confirm the directories were created
 print("Directories created successfully!")
@@ -48,10 +44,10 @@ if LLM == "Gimini":
     model = genai.GenerativeModel('gemini-pro')  # Create a generative model instance
     response = model.generate_content(prompt)  # Generate content using the model
     print(response.text)  # Print the generated response
-    
+
     # Extract headings from the response (assuming it returns a list of headings)
     headings = response.text.split('\n')  # Split the response text into a list of headings
-    
+
 else:
     # Use the G4f client to generate content
     client = Client()
@@ -174,15 +170,14 @@ for i in range(len(sentences)):
     )
 
     # Construct the full file path using os.path.join
-    file_path = os.path.join(Temp_dir, f"Voice_{i+1}.mp3")
+    file_path = os.path.join('Temp', f"Voice_{i+1}.mp3")
 
     # Save and play the generated audio
     save(audio, file_path)  # Pass the full file path to the save function
 
-import os  # Import the os module for interacting with the operating system
-from moviepy.editor import *  # Import all functions and classes from moviepy.editor
+import os
+from moviepy.editor import *
 
-# Define a function to resize the video with a zoom-in effect
 def resize_func_1(t):
     return 1 + 0.2 * t  # Zoom-in effect: scale increases over time
 
@@ -192,12 +187,12 @@ def resize_func_2(t):
 
 # Define a function to resize the video with a zoom-out effect
 def resize_func_3(t):
-    return 1 + 0.2 * (1 - t)  # Zoom-out effect: scale decreases over time
+    return max(0.1, 1 + 0.2 * (1 - t))  # Ensure the scaling factor is at least 0.1
 
 
 import os  # Import the os module for interacting with the operating system
 from moviepy.editor import (  # Import specific classes and functions from moviepy.editor
-    VideoFileClip, AudioFileClip, CompositeVideoClip, ColorClip, 
+    VideoFileClip, AudioFileClip, CompositeVideoClip, ColorClip,
     concatenate_videoclips, vfx, ImageClip  # Import ImageClip for handling images
 )
 
@@ -256,9 +251,9 @@ for i in range(len(generated_image)):
             .set_fps(25)
         )
         clip_img_2 = (
-            clip_img_1  # Use the same clip_img_1 as a base
-            .resize(resize_func_3)  # Apply zoom-out resizing function
-            .set_duration(half_audio_duration)  # Keep the same duration
+            clip_img_1
+            .resize(resize_func_3)
+            .set_duration(half_audio_duration)
         )
 
     # Concatenate the video clips with transitions
@@ -273,8 +268,8 @@ for i in range(len(generated_image)):
 
     print("Video with transitions saved to", output_path)
 
-import os  # Import the os module for interacting with the operating system
-from moviepy.editor import *  # Import all functions and classes from moviepy.editor
+import os
+from moviepy.editor import *
 
 # Initialize an empty list to store video paths
 video_paths = []
@@ -295,4 +290,193 @@ final_video = concatenate_videoclips(video_clips, method="compose")
 output_path = os.path.join(output_folder, 'combined_video.mp4')
 
 # Export the final combined video
-final_video.write_videofile(output_path, codec='libx264')    
+final_video.write_videofile(output_path, codec='libx264')
+
+# Extract audio from the video
+video = VideoFileClip(os.path.join("Temp", "combined_video.mp4"))
+audio = video.audio
+audio.write_audiofile(os.path.join("Temp", "voice.mp3"))
+
+# Function to split text into lines for subtitles
+def split_text_into_lines(data):
+    MaxChars = 15
+    MaxDuration = 2.5
+    MaxGap = 1.5
+
+    subtitles = []
+    line = []
+    line_duration = 0
+    line_chars = 0
+
+    for idx, word_data in enumerate(data):
+        word = word_data["word"]
+        start = word_data["start"]
+        end = word_data["end"]
+
+        line.append(word_data)
+        line_duration += end - start
+
+        temp = " ".join(item["word"] for item in line)
+
+        new_line_chars = len(temp)
+        duration_exceeded = line_duration > MaxDuration
+        chars_exceeded = new_line_chars > MaxChars
+        if idx > 0:
+            gap = word_data['start'] - data[idx - 1]['end']
+            maxgap_exceeded = gap > MaxGap
+        else:
+            maxgap_exceeded = False
+
+        if duration_exceeded or chars_exceeded or maxgap_exceeded:
+            if line:
+                subtitle_line = {
+                    "word": " ".join(item["word"] for item in line),
+                    "start": line[0]["start"],
+                    "end": line[-1]["end"],
+                    "textcontents": line
+                }
+                subtitles.append(subtitle_line)
+                line = []
+                line_duration = 0
+                line_chars = 0
+
+    if line:
+        subtitle_line = {
+            "word": " ".join(item["word"] for item in line),
+            "start": line[0]["start"],
+            "end": line[-1]["end"],
+            "textcontents": line
+        }
+        subtitles.append(subtitle_line)
+
+    return subtitles
+
+# Function to create caption clips
+def create_caption(textJSON, framesize, font="Roboto-Bold", color='white', highlight_color='RoyalBlue', stroke_color='black', stroke_width=2):
+    wordcount = len(textJSON['textcontents'])
+    full_duration = textJSON['end'] - textJSON['start']
+
+    word_clips = []
+    xy_textclips_positions = []
+
+    x_pos = 0
+    y_pos = 0
+    line_width = 0
+    frame_width = framesize[0]
+    frame_height = framesize[1]
+
+    x_buffer = frame_width * 1 / 10
+    max_line_width = frame_width - x_buffer
+    fontsize = int(frame_height * 0.045)
+
+    space_width = ""
+    space_height = ""
+
+    for index, wordJSON in enumerate(textJSON['textcontents']):
+        duration = wordJSON['end'] - wordJSON['start']
+        word_clip = TextClip(wordJSON['word'], font=font, fontsize=fontsize, color=color, stroke_color=stroke_color, stroke_width=stroke_width).set_start(textJSON['start']).set_duration(full_duration)
+        word_clip_space = TextClip(" ", font=font, fontsize=fontsize, color=color).set_start(textJSON['start']).set_duration(full_duration)
+        word_width, word_height = word_clip.size
+        space_width, space_height = word_clip_space.size
+        if line_width + word_width + space_width <= max_line_width:
+            xy_textclips_positions.append({
+                "x_pos": x_pos,
+                "y_pos": y_pos,
+                "width": word_width,
+                "height": word_height,
+                "word": wordJSON['word'],
+                "start": wordJSON['start'],
+                "end": wordJSON['end'],
+                "duration": duration
+            })
+
+            word_clip = word_clip.set_position((x_pos, y_pos))
+            word_clip_space = word_clip_space.set_position((x_pos + word_width, y_pos))
+
+            x_pos = x_pos + word_width + space_width
+            line_width = line_width + word_width + space_width
+        else:
+            x_pos = 0
+            y_pos = y_pos + word_height + 10
+            line_width = word_width + space_width
+
+            xy_textclips_positions.append({
+                "x_pos": x_pos,
+                "y_pos": y_pos,
+                "width": word_width,
+                "height": word_height,
+                "word": wordJSON['word'],
+                "start": wordJSON['start'],
+                "end": wordJSON['end'],
+                "duration": duration
+            })
+
+            word_clip = word_clip.set_position((x_pos, y_pos))
+            word_clip_space = word_clip_space.set_position((x_pos + word_width, y_pos))
+            x_pos = word_width + space_width
+
+        word_clips.append(word_clip)
+        word_clips.append(word_clip_space)
+
+    for highlight_word in xy_textclips_positions:
+        word_clip_highlight = TextClip(highlight_word['word'], font=font, fontsize=fontsize, color=highlight_color, stroke_color=stroke_color, stroke_width=stroke_width).set_start(highlight_word['start']).set_duration(highlight_word['duration'])
+        word_clip_highlight = word_clip_highlight.set_position((highlight_word['x_pos'], highlight_word['y_pos']))
+        word_clips.append(word_clip_highlight)
+
+    return word_clips, xy_textclips_positions
+
+def add_subtitles(voice_over):
+    model_size = "small"
+    model = WhisperModel(model_size)
+
+    segments, info = model.transcribe(voice_over, word_timestamps=True)
+    # Store the segments as a list immediately
+    segment_list = list(segments)  # The transcription will actually run here.
+    for segment in segment_list: # Iterate over the list of segments
+        for word in segment.words:
+            print("[%.2fs -> %.2fs] %s" % (word.start, word.end, word.word))
+
+    wordlevel_info = []
+
+    for segment in segment_list: # Use segment_list instead of segments
+        for word in segment.words:
+            wordlevel_info.append({'word': word.word, 'start': word.start, 'end': word.end})
+
+    with open('data.json', 'w') as f:
+        json.dump(wordlevel_info, f, indent=4)
+
+    with open('data.json', 'r') as f:
+        wordlevel_info = json.load(f)
+
+    linelevel_subtitles = split_text_into_lines(wordlevel_info)
+
+    input_video = VideoFileClip('final.mp4')
+    frame_size = input_video.size
+
+    all_linelevel_splits = []
+
+    for line in linelevel_subtitles:
+        out_clips, positions = create_caption(line, frame_size)
+
+        max_width = 0
+        max_height = 0
+
+        for position in positions:
+            x_pos, y_pos = position['x_pos'], position['y_pos']
+            width, height = position['width'], position['height']
+
+            max_width = max(max_width, x_pos + width)
+            max_height = max(max_height, y_pos + height)
+
+        centered_clips = [each.set_position('center') for each in out_clips]
+
+        all_linelevel_splits.extend(centered_clips)
+
+    final_video = CompositeVideoClip([input_video] + all_linelevel_splits)
+    final_video = final_video.set_audio(input_video.audio)
+
+    final_video.write_videofile("output.mp4")
+    os.remove('voice.mp3')
+
+voice_over_path = 'Temp/voice.mp3'
+add_subtitles(voice_over_path)
