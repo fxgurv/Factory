@@ -5,3 +5,5 @@ pexels-api-py
 faster-whisper
 opencv-python
 mutagen
+g4f
+curl_cffi
